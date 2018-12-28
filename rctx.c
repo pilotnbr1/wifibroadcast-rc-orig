@@ -265,7 +265,7 @@ void sendRC(unsigned char seqno, telemetry_data_t *td) {
 	    }
 	}
 //	printf ("bestadapter: %d (%d dbm)\n",best_adapter, best_dbm);
-	if (write(socks[best_adapter], &framedata, sizeof(framedata)) < 0 ) fprintf(stderr, "!");	/// framedata_s = 28 or 29 bytes
+	if (write(socks[best_adapter], &framedata, sizeof(framedata)) < 0 ) { fprintf(stderr, "!"); exit(1); }	/// framedata_s = 28 or 29 bytes
     } else {
 	printf ("ERROR: Could not open rx status memory!");
     }
