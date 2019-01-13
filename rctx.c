@@ -20,12 +20,21 @@
 #include <getopt.h>
 #include "lib.h"
 
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+
 #include "/tmp/rctx.h"
 
 #define UPDATE_INTERVAL 2000 // read Joystick every 2 ms or 500x per second
 #define JOY_CHECK_NTH_TIME 400 // check if joystick disconnected every 400th time or 200ms or 5x per second
 #define JOYSTICK_N 0
 #define JOY_DEV "/sys/class/input/js0"
+
+#define SERVER "127.0.0.1"
+#define BUFLEN 2  //Max length of buffer
+#define PORT2 1258 //BandSwitch py script in
+
 
 #ifdef JSSWITCHES  // 1 or 2 byte more for channels 9 - 16/24 as switches
 
@@ -314,27 +323,39 @@ int main (int argc, char *argv[]) {
     int joy_connected = 0;
     int joy = 1;
     int update_nth_time = 0;
+    int shmid;
+    char *shared_memory;
+    int Channel = 0;
+    char ShmBuf[2];
+    int tmp = 0;
 
-    while (1) {
+    while (1)
+    {
 	int nOptionIndex;
-	static const struct option optiona[] = {
+	static const struct option optiona[] =
+        {
 	    { "help", no_argument, &flagHelp, 1 },
 	    { 0, 0, 0, 0 }
 	};
-	int c = getopt_long(argc, argv, "h:",
-	    optiona, &nOptionIndex);
+
+fprintf( stderr, "init ");
+	int c = getopt_long(argc, argv, "h:",  optiona, &nOptionIndex);
+
+	fprintf( stderr, "While\n");
 
 	if (c == -1)
 	    break;
-	switch (c) {
-	case 0: // long option
-	    break;
-	case 'h': // help
-	    usage();
-	    break;
-	default:
-	    fprintf(stderr, "unknown switch %c\n", c);
-	    usage();
+
+	switch (c) 
+	{
+		case 0: // long option
+	    		break;
+		case 'h': // help
+	    		usage();
+	    		break;
+		default:
+	    		fprintf(stderr, "unknown switch %c\n", c);
+	    		usage();
 	}
     }
 
@@ -343,13 +364,41 @@ int main (int argc, char *argv[]) {
     }
 
     int x = optind;
+    x++;
+    Channel = atoi(argv[1]);
+
     int num_interfaces = 0;
-    while(x < argc && num_interfaces < 8) {
+    while(x < argc && num_interfaces < 8)
+    {
 	socks[num_interfaces] = open_sock(argv[x]);
 	++num_interfaces;
 	++x;
 	usleep(20000); // wait a bit between configuring interfaces to reduce Atheros and Pi USB flakiness
     }
+
+
+        //udp init
+        struct sockaddr_in si_other2;
+        int s2, slen2 = sizeof(si_other2);
+        char message2[BUFLEN];
+
+        if ((s2 = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
+        {
+                exit(1);
+        }
+
+        memset((char *) &si_other2, 0, sizeof(si_other2));
+        si_other2.sin_family = AF_INET;
+        si_other2.sin_port = htons(PORT2);
+
+        if (inet_aton(SERVER, &si_other2.sin_addr) == 0)
+        {
+                fprintf(stderr, "inet_aton() failed\n");
+                exit(1);
+        }
+        //udp init end
+
+
 
 	framedata.rt1 = 0; // <-- radiotap version
 	framedata.rt2 = 0; // <-- radiotap version
@@ -433,7 +482,23 @@ int main (int argc, char *argv[]) {
 			sendRC(seqno,&td);
 			usleep(2000); // wait 2ms between sending multiple frames to lower collision probability
 		    }
+
 		    seqno++;
+                    if( Channel >= 1 && Channel <= 8 )
+		    {
+			message2[0] = 0;
+			message2[1] = 0;
+			tmp = Channel;
+			tmp--;
+			message2[0] = rcData[tmp] & 0xFF;
+			message2[1] = rcData[tmp] >> 8;
+
+                        if (sendto(s2, message2, 2, 0, (struct sockaddr *) &si_other2, slen2) == -1)
+			{
+				//printf("sendto() error");
+			}
+
+                    }
 		}
 		if (counter % JOY_CHECK_NTH_TIME == 0) {
 		    joy_connected=access(JOY_DEV, F_OK);
@@ -446,5 +511,7 @@ int main (int argc, char *argv[]) {
 		counter++;
 	}
 	SDL_JoystickClose (js);
+
+	close(s2);
 	return EXIT_SUCCESS;
 }
