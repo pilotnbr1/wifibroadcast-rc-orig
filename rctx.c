@@ -20,11 +20,11 @@
 #include <getopt.h>
 #include "lib.h"
 
-#include <sys/types.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
+#include <wiringPi.h>
+#include <mcp3004.h>
 
 #include "/tmp/rctx.h"
+int ReadChannel(int channel);
 
 #define UPDATE_INTERVAL 2000 // read Joystick every 2 ms or 500x per second
 #define JOY_CHECK_NTH_TIME 400 // check if joystick disconnected every 400th time or 200ms or 5x per second
@@ -318,16 +318,33 @@ void telemetry_init(telemetry_data_t *td) {
 }
 
 
+void init_mcp3008()
+{
+  wiringPiSetup();
+  mcp3004Setup(100, 0);
+
+}
+
+int ReadChannel(int channel)
+{
+        int value = -1;
+        value = analogRead(100+channel);
+        return value;
+}
+
+
 int main (int argc, char *argv[]) {
     int done = 1;
     int joy_connected = 0;
     int joy = 1;
     int update_nth_time = 0;
-    int shmid;
-    char *shared_memory;
     int Channel = 0;
-    char ShmBuf[2];
     int tmp = 0;
+
+    #ifdef MCP3008
+    init_mcp3008();
+    #else
+    #endif
 
     while (1)
     {
@@ -476,9 +493,24 @@ fprintf( stderr, "init ");
 	while (done) {
 		done = eventloop_joystick();
 //		fprintf(stderr, "eventloop_joystick\n");
-		if (counter % UPDATE_NTH_TIME == 0) {
+		if (counter % UPDATE_NTH_TIME == 0)
+		{
 //		    fprintf(stderr, "SendRC\n");
-		    for(k=0; k < TRANSMISSIONS; ++k) {
+		#ifdef MCP3008
+                rcData[4] = 1000;
+                rcData[5] = 1000;
+                rcData[6] = 1000;
+                rcData[7] = 1000;
+
+                rcData[4] += ReadChannel(0);
+                rcData[5] += ReadChannel(1);
+                rcData[6] += ReadChannel(6);
+                rcData[7] += ReadChannel(7);
+                #else
+
+                #endif
+		    for(k=0; k < TRANSMISSIONS; ++k) 
+		    {
 			sendRC(seqno,&td);
 			usleep(2000); // wait 2ms between sending multiple frames to lower collision probability
 		    }
