@@ -259,25 +259,7 @@ void sendRC(unsigned char seqno, telemetry_data_t *td) {
 #endif
 //  printf ("rcdata0:%d\n",rcData[0]);
 
-    int best_adapter = 0;
-    if(td->rx_status != NULL) {
-	int j = 0;
-	int ac = td->rx_status->wifi_adapter_cnt;
-	int best_dbm = -1000;
-
-	// find out which card has best signal and ignore ralink (type=1) ones
-	for(j=0; j<ac; ++j) {
-	    if ((best_dbm < td->rx_status->adapter[j].current_signal_dbm)&&(td->rx_status->adapter[j].type == 0)) {
-		best_dbm = td->rx_status->adapter[j].current_signal_dbm;
-		best_adapter = j;
-		//printf ("best_adapter: :%d\n",best_adapter);
-	    }
-	}
-//	printf ("bestadapter: %d (%d dbm)\n",best_adapter, best_dbm);
-	if (write(socks[best_adapter], &framedata, sizeof(framedata)) < 0 ) { fprintf(stderr, "!"); exit(1); }	/// framedata_s = 28 or 29 bytes
-    } else {
-	printf ("ERROR: Could not open rx status memory!");
-    }
+    if (write(socks[0], &framedata, sizeof(framedata)) < 0 ) { fprintf(stderr, "!"); exit(1); }	/// framedata_s = 28 or 29 bytes
 }
 
 
